@@ -121,7 +121,7 @@ No runtime. No daemon. Zero configuration. Single binary, ~2MB release.
 
 ## Roadmap
 
-- [x] `--kill` flag with confirmation prompt
+- [x] `--kill` flag
 - [ ] `--watch` mode: re-runs every N seconds
 - [ ] Windows support (via `netstat` + WMI)
 - [x] Shell completions
