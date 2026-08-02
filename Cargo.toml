@@ -1,0 +1,30 @@
+[package]
+name = "portmortem"
+version = "0.1.0"
+edition = "2021"
+description = "Who's blocking my port, and why?"
+authors = []
+license = "MIT"
+
+[[bin]]
+name = "portmortem"
+path = "src/main.rs"
+version = "0.1"
+
+[dependencies]
+# Argument parsing — tiny, no_std-compatible
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+
+# Colored terminal output
+colored = "2"
+
+# Cross-platform process info
+sysinfo = "0.30"
+libc = "0.2.183"
+
+[profile.release]
+opt-level = "z"     # Minimize binary size
+lto = true
+codegen-units = 1
+strip = true

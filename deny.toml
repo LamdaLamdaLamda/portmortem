@@ -1,0 +1,51 @@
+########################################
+# General configuration
+########################################
+
+########################################
+# LICENSES
+########################################
+
+[licenses]
+# Allow common permissive licenses in Rust ecosystem
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "MPL-2.0"
+]
+
+# Be strict about license detection confidence
+confidence-threshold = 0.8
+
+########################################
+# BANS (dependency control)
+########################################
+
+[bans]
+multiple-versions = "warn"
+
+########################################
+# SOURCES (supply chain integrity)
+########################################
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "warn"
+
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+########################################
+# ADVISORIES (security vulnerabilities)
+########################################
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/RustSec/advisory-db"]
+
+unmaintained = "none"
+yanked = "warn"

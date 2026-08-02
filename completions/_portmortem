@@ -1,0 +1,22 @@
+#compdef portmortem
+
+_portmortem() {
+    local -a opts ports
+
+    opts=(
+        '(-a --all-ports)'{-a,--all-ports}'[show all ports held by the same process]'
+        '(-j --json)'{-j,--json}'[output as JSON]'
+        '(-k --kill)'{-k,--kill}'[kill the binding process]'
+        '--completion=[install shell completion]:shell:(bash zsh fish nu)'
+        '(-h --help)'{-h,--help}'[show help]'
+        '(-V --version)'{-V,--version}'[show version]'
+    )
+
+    ports=(${(f)"$(ss -tlunp 2>/dev/null | awk 'NR>1 {split($5,a,":"); print a[length(a)]}' | sort -un)"})
+
+    _arguments -s \
+        $opts \
+        '*:port:(($ports))'
+}
+
+_portmortem "$@"
