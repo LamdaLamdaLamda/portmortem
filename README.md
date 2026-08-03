@@ -119,6 +119,21 @@ src/
 
 No runtime. No daemon. Zero configuration. Single binary, ~2MB release.
 
+## Testing the Linux code path (via Docker)
+
+ The `Dockerfile` builds `portmortem` for Linux and smoke-tests the
+resulting binary in a minimal container — useful for verifying that path
+before pushing, e.g. from macOS:
+
+```bash
+docker build -t portmortem-linux-test .
+docker run --rm portmortem-linux-test
+```
+
+This builds the binary in `rust:1-bookworm`, then runs it against a real
+listener (`nc`) inside a `debian:bookworm-slim` container, checking plain
+output, `--json`, and `--kill`. Exit code `0` means all checks passed.
+
 ## Roadmap
 
 - [x] `--kill` flag
