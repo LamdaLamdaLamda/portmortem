@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-03
+
 ### Added
 
 - Port lookup by number, resolving the owning process's binary path, cmdline,
@@ -21,4 +23,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS support via `lsof -F` (machine-readable output mode)
 - Shell completion scripts for bash, zsh, fish, and nu
 
-[Unreleased]: https://github.com/LamdaLamdaLamda/portmortem/commits/master
+[Unreleased]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/LamdaLamdaLamda/portmortem/releases/tag/v1.0.0

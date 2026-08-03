@@ -1,6 +1,6 @@
 [package]
 name = "portmortem"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "Who's blocking my port, and why?"
 authors = []
@@ -9,7 +9,6 @@ license = "MIT"
 [[bin]]
 name = "portmortem"
 path = "src/main.rs"
-version = "0.1"
 
 [dependencies]
 # Argument parsing — tiny, no_std-compatible
