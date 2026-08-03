@@ -1,0 +1,67 @@
+name: macOS
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release --verbose
+
+      - name: Run unit tests
+        run: cargo test --release --verbose
+
+      - name: Smoke test — free port
+        run: |
+          ./target/release/portmortem 65432
+          ./target/release/portmortem 65432 --json
+
+      - name: Smoke test — occupied port (real lsof path)
+        run: |
+          python3 -m http.server 8123 &
+          SERVER_PID=$!
+          sleep 1
+
+          ./target/release/portmortem 8123
+          ./target/release/portmortem 8123 --json | tee /tmp/out.json
+
+          # Fail the job if the JSON doesn't actually report the listener
+          grep -q '"port":8123' /tmp/out.json
+
+          kill $SERVER_PID
+
+      - name: Smoke test — --kill flag
+        run: |
+          python3 -m http.server 8124 &
+          SERVER_PID=$!
+          sleep 1
+
+          ./target/release/portmortem 8124 --kill
+          sleep 1
+
+          # Process should be gone now
+          if kill -0 $SERVER_PID 2>/dev/null; then
+            echo "process still alive after --kill" >&2
+            exit 1
+          fi
+
+      - name: --version / --help sanity check
+        run: |
+          ./target/release/portmortem --version
+          ./target/release/portmortem --help
