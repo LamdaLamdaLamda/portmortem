@@ -3,8 +3,18 @@ mod platform;
 mod process;
 mod render;
 
+use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
 use clap::Parser;
 use colored::Colorize;
+
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn handle_sigint(_signum: libc::c_int) {
+    INTERRUPTED.store(true, Ordering::SeqCst);
+}
 
 #[derive(Parser)]
 #[command(
@@ -29,20 +39,71 @@ struct Cli {
     /// Kills binded process
     #[arg(short = 'k', long = "kill")]
     kill: bool,
+
+    /// Re-run every SECONDS (human-readable output only)
+    #[arg(short = 'w', long = "watch", value_name = "SECONDS", conflicts_with = "json")]
+    watch: Option<u64>,
 }
 
 fn main() {
     let cli = Cli::parse();
-    let mut any_found = false;
 
+    match cli.watch {
+        Some(interval_secs) => watch_loop(&cli, interval_secs),
+        None => inspect_ports(&cli),
+    }
+}
+
+/// Clears the screen and re-runs `inspect_ports` every `interval_secs`
+/// until interrupted (Ctrl+C).
+fn watch_loop(cli: &Cli, interval_secs: u64) {
+    unsafe {
+        libc::signal(libc::SIGINT, handle_sigint as *const () as libc::sighandler_t);
+    }
+
+    let interval = Duration::from_secs(interval_secs);
+
+    while !INTERRUPTED.load(Ordering::SeqCst) {
+        print!("\x1B[2J\x1B[1;1H"); // clear screen, move cursor to top-left
+        io::stdout().flush().ok();
+
+        let ports = cli.ports.iter().map(u16::to_string).collect::<Vec<_>>().join(", ");
+        println!(
+            "{} watching port(s) {} — every {}s, Ctrl+C to stop\n",
+            "●".cyan().bold(),
+            ports.bold(),
+            interval_secs
+        );
+
+        inspect_ports(cli);
+        sleep_interruptible(interval);
+    }
+
+    println!("\n{} watch stopped", "✓".green().bold());
+}
+
+/// Sleeps for `total`, checking `INTERRUPTED` every 100ms so Ctrl+C
+/// during the wait is picked up promptly instead of after the full interval.
+fn sleep_interruptible(total: Duration) {
+    let step = Duration::from_millis(100);
+    let mut waited = Duration::ZERO;
+
+    while waited < total && !INTERRUPTED.load(Ordering::SeqCst) {
+        let remaining = total - waited;
+        let this_step = step.min(remaining);
+        std::thread::sleep(this_step);
+        waited += this_step;
+    }
+}
+
+/// Looks up and renders every port in `cli.ports` once.
+fn inspect_ports(cli: &Cli) {
     for port in &cli.ports {
         match platform::find_port(*port) {
             Ok(entries) if entries.is_empty() => {
                 println!("{} Port {} is free", "✓".green().bold(), port.to_string().bold());
             }
             Ok(entries) => {
-                any_found = true;
-
                 for entry in &entries {
                     match process::enrich(entry, cli.all_ports) {
                         Ok(info) => {
@@ -73,9 +134,5 @@ fn main() {
                 std::process::exit(1);
             }
         }
-    }
-
-    if !any_found && cli.ports.len() == 1 {
-        std::process::exit(0);
     }
 }

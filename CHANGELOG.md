@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `-w`, `--watch <SECONDS>` to re-run at a fixed interval, clearing the
+  screen between updates. Human-readable output only, mutually exclusive
+  with `--json`
 - CI, License, and Release badges to README.md
 
 ## [1.0.0] - 2026-08-03
