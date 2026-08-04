@@ -1,5 +1,10 @@
 # portmortem
 
+![macOS CI](https://github.com/LamdaLamdaLamda/portmortem/actions/workflows/macos.yml/badge.svg)
+![Linux CI](https://github.com/LamdaLamdaLamda/portmortem/actions/workflows/linux.yml/badge.svg)
+![License](https://img.shields.io/github/license/LamdaLamdaLamda/portmortem)
+![Release](https://img.shields.io/github/v/release/LamdaLamdaLamda/portmortem)
+
 **Who's blocking your port, and why?**
 
 `portmortem` gives you everything about a port-holding process in one command — no more chaining `lsof`, `ps`, `ls /proc`, and `cat /proc/*/cmdline`.
