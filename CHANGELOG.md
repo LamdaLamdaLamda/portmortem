@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-03
+
 ### Added
 
 - `-w`, `--watch <SECONDS>` to re-run at a fixed interval, clearing the
   screen between updates. Human-readable output only, mutually exclusive
   with `--json`
 - CI, License, and Release badges to README.md
+
+### Security
+
+- Bump `crossbeam-epoch` to `0.9.20`, fixing
+  [RUSTSEC-2026-0204](https://rustsec.org/advisories/RUSTSEC-2026-0204)
 
 ## [1.0.0] - 2026-08-03
 
@@ -30,5 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS support via `lsof -F` (machine-readable output mode)
 - Shell completion scripts for bash, zsh, fish, and nu
 
-[Unreleased]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/LamdaLamdaLamda/portmortem/releases/tag/v1.0.0
