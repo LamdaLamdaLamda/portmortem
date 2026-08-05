@@ -34,7 +34,7 @@ jobs:
 
       - name: Smoke test — occupied port (real lsof path)
         run: |
-          python3 -m http.server 8123 &
+          python3 -m http.server 8123 > /tmp/py8123.log 2>&1 &
           SERVER_PID=$!
 
           # python takes a moment to actually bind — poll lsof instead of a
@@ -43,7 +43,17 @@ jobs:
             lsof -nP -iTCP:8123 -sTCP:LISTEN >/dev/null 2>&1 && break
             sleep 0.5
           done
-          lsof -nP -iTCP:8123 -sTCP:LISTEN || { echo "port 8123 never reached LISTEN state" >&2; exit 1; }
+          if ! lsof -nP -iTCP:8123 -sTCP:LISTEN; then
+            echo "port 8123 never reached LISTEN state" >&2
+            echo "--- python process alive? ---" >&2
+            kill -0 "$SERVER_PID" 2>&1 && echo "yes (pid $SERVER_PID)" >&2 || echo "no — it exited" >&2
+            echo "--- python output ---" >&2
+            cat /tmp/py8123.log >&2
+            echo "--- python3 --version ---" >&2
+            python3 --version >&2
+            which python3 >&2
+            exit 1
+          fi
 
           ./target/release/portmortem 8123
           ./target/release/portmortem 8123 --json | tee /tmp/out.json
