@@ -34,32 +34,17 @@ jobs:
 
       - name: Smoke test — occupied port (real lsof path)
         run: |
-          # -u: unbuffered stdout, so redirected output shows up immediately
-          # instead of sitting in a block buffer (stdout isn't a tty here).
-          # --bind 127.0.0.1: avoids http.server's socket.getfqdn() call
-          # doing a slow/hanging reverse-DNS lookup on sandboxed CI runners,
-          # which happens *before* listen() and can block startup entirely.
-          python3 -u -m http.server 8123 --bind 127.0.0.1 > /tmp/py8123.log 2>&1 &
+          # nc instead of `python3 -m http.server`: no interpreter startup,
+          # no DNS/hostname resolution, no output buffering to worry about —
+          # binds essentially instantly, far fewer moving parts to debug.
+          nc -l 8123 &
           SERVER_PID=$!
 
-          # python takes a moment to actually bind — poll lsof instead of a
-          # fixed sleep so this isn't flaky under CI load. Generous timeout
-          # (30s) in case of first-run Gatekeeper scanning delays.
-          for i in $(seq 1 60); do
+          for i in $(seq 1 20); do
             lsof -nP -iTCP:8123 -sTCP:LISTEN >/dev/null 2>&1 && break
             sleep 0.5
           done
-          if ! lsof -nP -iTCP:8123 -sTCP:LISTEN; then
-            echo "port 8123 never reached LISTEN state" >&2
-            echo "--- python process alive? ---" >&2
-            kill -0 "$SERVER_PID" 2>&1 && echo "yes (pid $SERVER_PID)" >&2 || echo "no — it exited" >&2
-            echo "--- python output ---" >&2
-            cat /tmp/py8123.log >&2
-            echo "--- python3 --version ---" >&2
-            python3 --version >&2
-            which python3 >&2
-            exit 1
-          fi
+          lsof -nP -iTCP:8123 -sTCP:LISTEN || { echo "port 8123 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8123
           ./target/release/portmortem 8123 --json | tee /tmp/out.json
@@ -71,10 +56,10 @@ jobs:
 
       - name: Smoke test — --kill flag
         run: |
-          python3 -u -m http.server 8124 --bind 127.0.0.1 &
+          nc -l 8124 &
           SERVER_PID=$!
 
-          for i in $(seq 1 60); do
+          for i in $(seq 1 20); do
             lsof -nP -iTCP:8124 -sTCP:LISTEN >/dev/null 2>&1 && break
             sleep 0.5
           done
