@@ -36,7 +36,10 @@ jobs:
         run: |
           # -u: unbuffered stdout, so redirected output shows up immediately
           # instead of sitting in a block buffer (stdout isn't a tty here).
-          python3 -u -m http.server 8123 > /tmp/py8123.log 2>&1 &
+          # --bind 127.0.0.1: avoids http.server's socket.getfqdn() call
+          # doing a slow/hanging reverse-DNS lookup on sandboxed CI runners,
+          # which happens *before* listen() and can block startup entirely.
+          python3 -u -m http.server 8123 --bind 127.0.0.1 > /tmp/py8123.log 2>&1 &
           SERVER_PID=$!
 
           # python takes a moment to actually bind — poll lsof instead of a
@@ -68,7 +71,7 @@ jobs:
 
       - name: Smoke test — --kill flag
         run: |
-          python3 -u -m http.server 8124 &
+          python3 -u -m http.server 8124 --bind 127.0.0.1 &
           SERVER_PID=$!
 
           for i in $(seq 1 60); do

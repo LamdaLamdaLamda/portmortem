@@ -34,7 +34,10 @@ jobs:
 
       - name: Smoke test — occupied port (real /proc path)
         run: |
-          python3 -m http.server 8123 &
+          # --bind 127.0.0.1: avoids http.server's socket.getfqdn() call
+          # doing a slow/hanging reverse-DNS lookup on sandboxed CI runners,
+          # which happens *before* listen() and can block startup entirely.
+          python3 -m http.server 8123 --bind 127.0.0.1 &
           SERVER_PID=$!
 
           # python takes a moment to actually bind — poll ss instead of a
@@ -55,7 +58,7 @@ jobs:
 
       - name: Smoke test — --kill flag
         run: |
-          python3 -m http.server 8124 &
+          python3 -m http.server 8124 --bind 127.0.0.1 &
           SERVER_PID=$!
 
           for i in $(seq 1 20); do
