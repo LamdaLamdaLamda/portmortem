@@ -34,12 +34,15 @@ jobs:
 
       - name: Smoke test — occupied port (real lsof path)
         run: |
-          python3 -m http.server 8123 > /tmp/py8123.log 2>&1 &
+          # -u: unbuffered stdout, so redirected output shows up immediately
+          # instead of sitting in a block buffer (stdout isn't a tty here).
+          python3 -u -m http.server 8123 > /tmp/py8123.log 2>&1 &
           SERVER_PID=$!
 
           # python takes a moment to actually bind — poll lsof instead of a
-          # fixed sleep so this isn't flaky under CI load.
-          for i in $(seq 1 20); do
+          # fixed sleep so this isn't flaky under CI load. Generous timeout
+          # (30s) in case of first-run Gatekeeper scanning delays.
+          for i in $(seq 1 60); do
             lsof -nP -iTCP:8123 -sTCP:LISTEN >/dev/null 2>&1 && break
             sleep 0.5
           done
@@ -65,10 +68,10 @@ jobs:
 
       - name: Smoke test — --kill flag
         run: |
-          python3 -m http.server 8124 &
+          python3 -u -m http.server 8124 &
           SERVER_PID=$!
 
-          for i in $(seq 1 20); do
+          for i in $(seq 1 60); do
             lsof -nP -iTCP:8124 -sTCP:LISTEN >/dev/null 2>&1 && break
             sleep 0.5
           done
