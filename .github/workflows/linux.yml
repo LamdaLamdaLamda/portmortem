@@ -36,7 +36,14 @@ jobs:
         run: |
           python3 -m http.server 8123 &
           SERVER_PID=$!
-          sleep 1
+
+          # python takes a moment to actually bind — poll ss instead of a
+          # fixed sleep so this isn't flaky under CI load.
+          for i in $(seq 1 20); do
+            ss -ltn | grep -q ":8123 " && break
+            sleep 0.5
+          done
+          ss -ltn | grep -q ":8123 " || { echo "port 8123 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8123
           ./target/release/portmortem 8123 --json | tee /tmp/out.json
@@ -50,7 +57,12 @@ jobs:
         run: |
           python3 -m http.server 8124 &
           SERVER_PID=$!
-          sleep 1
+
+          for i in $(seq 1 20); do
+            ss -ltn | grep -q ":8124 " && break
+            sleep 0.5
+          done
+          ss -ltn | grep -q ":8124 " || { echo "port 8124 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8124 --kill
           sleep 1

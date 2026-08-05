@@ -36,7 +36,14 @@ jobs:
         run: |
           python3 -m http.server 8123 &
           SERVER_PID=$!
-          sleep 1
+
+          # python takes a moment to actually bind — poll lsof instead of a
+          # fixed sleep so this isn't flaky under CI load.
+          for i in $(seq 1 20); do
+            lsof -nP -iTCP:8123 -sTCP:LISTEN >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          lsof -nP -iTCP:8123 -sTCP:LISTEN || { echo "port 8123 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8123
           ./target/release/portmortem 8123 --json | tee /tmp/out.json
@@ -50,7 +57,12 @@ jobs:
         run: |
           python3 -m http.server 8124 &
           SERVER_PID=$!
-          sleep 1
+
+          for i in $(seq 1 20); do
+            lsof -nP -iTCP:8124 -sTCP:LISTEN >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          lsof -nP -iTCP:8124 -sTCP:LISTEN || { echo "port 8124 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8124 --kill
           sleep 1
