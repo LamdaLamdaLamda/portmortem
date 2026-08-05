@@ -71,7 +71,10 @@ jobs:
       - name: Smoke test — --kill flag
         shell: pwsh
         run: |
+          Write-Output "Running as: $(whoami)"
+
           $proc = Start-Process -FilePath "python" -ArgumentList "-m","http.server","8124" -PassThru -WindowStyle Hidden
+          Write-Output "PowerShell started PID: $($proc.Id)"
 
           $bound = $false
           for ($i = 0; $i -lt 20; $i++) {
@@ -84,6 +87,21 @@ jobs:
           if (-not $bound) {
             throw "python http.server never reached LISTENING state on port 8124"
           }
+
+          # Diagnostic: does portmortem resolve the same PID PowerShell started,
+          # and does the process' owner match the current user?
+          $json = .\target\release\portmortem.exe 8124 --json
+          Write-Output "portmortem resolved: $json"
+          if ($json -match '"pid":(\d+)') {
+            $resolvedPid = $Matches[1]
+            Write-Output "portmortem PID: $resolvedPid  |  PowerShell PID: $($proc.Id)"
+            if ($resolvedPid -ne $proc.Id.ToString()) {
+              Write-Warning "PID MISMATCH between portmortem and PowerShell"
+            }
+          }
+          $ownerInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$($proc.Id)" |
+            Invoke-CimMethod -MethodName GetOwner
+          Write-Output "Process owner: $($ownerInfo.Domain)\$($ownerInfo.User)"
 
           .\target\release\portmortem.exe 8124 --kill
           Start-Sleep -Seconds 1

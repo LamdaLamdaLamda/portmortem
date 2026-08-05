@@ -113,13 +113,24 @@ fn inspect_ports(cli: &Cli) {
                                 render::as_human(&info);
 
                                 if cli.kill {
-                                    kill::kill_process(info.pid as i32)
-                                        .expect("Failed to terminate process");
-                                    println!(
-                                        "{} Process {} terminated",
-                                        "✓".green().bold(),
-                                        info.pid.to_string().bold()
-                                    );
+                                    match kill::kill_process(info.pid as i32) {
+                                        Ok(()) => {
+                                            println!(
+                                                "{} Process {} terminated",
+                                                "✓".green().bold(),
+                                                info.pid.to_string().bold()
+                                            );
+                                        }
+                                        Err(e) => {
+                                            eprintln!(
+                                                "{} Failed to terminate process {}: {}",
+                                                "✗".red().bold(),
+                                                info.pid.to_string().bold(),
+                                                e
+                                            );
+                                            std::process::exit(1);
+                                        }
+                                    }
                                 }
                             }
                         }
