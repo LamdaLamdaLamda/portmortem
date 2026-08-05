@@ -89,11 +89,18 @@ Arguments:
   <PORT>...  Port number(s) to investigate
 
 Options:
-  -a, --all-ports  Show all ports held by the same process(es)
-  -j, --json       Output as JSON (newline-delimited, one object per match)
-  -k, --kill       Kills binded process
-  -h, --help       Print help
-  -V, --version    Print version
+  -a, --all-ports        Show all ports held by the same process(es)
+  -j, --json             Output as JSON (newline-delimited, one object per match)
+  -k, --kill             Kills binded process
+  -w, --watch <SECONDS>  Re-run every SECONDS (human-readable output only)
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+Watch a port, clearing the screen every 2 seconds:
+
+```bash
+$ portmortem 8080 --watch 2
 ```
 
 ## Why not just use `lsof -i :8080`?
@@ -142,7 +149,7 @@ output, `--json`, and `--kill`. Exit code `0` means all checks passed.
 ## Roadmap
 
 - [x] `--kill` flag
-- [ ] `--watch` mode: re-runs every N seconds
+- [x] `--watch` mode: re-runs every N seconds
 - [ ] Windows support (via `netstat` + WMI)
 - [x] Shell completions
 
