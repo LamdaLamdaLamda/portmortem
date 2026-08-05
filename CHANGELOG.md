@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Windows support: socket table via the IP Helper API
+  (`GetExtendedTcpTable`/`GetExtendedUdpTable`), process enrichment via the
+  `sysinfo` crate, `--kill` via `sysinfo::Process::kill`
+
 ## [1.1.0] - 2026-08-03
 
 ### Added

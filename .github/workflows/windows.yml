@@ -1,0 +1,75 @@
+name: Windows
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        shell: pwsh
+        run: cargo build --release --verbose
+
+      - name: Run unit tests
+        shell: pwsh
+        run: cargo test --release --verbose
+
+      - name: Smoke test — free port
+        shell: pwsh
+        run: |
+          .\target\release\portmortem.exe 65432
+          .\target\release\portmortem.exe 65432 --json
+
+      - name: Smoke test — occupied port (real IP Helper API path)
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "python" -ArgumentList "-m","http.server","8123" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 1
+
+          .\target\release\portmortem.exe 8123
+          $json = .\target\release\portmortem.exe 8123 --json
+          Write-Output $json
+
+          # Fail the job if the JSON doesn't actually report the listener
+          if ($json -notmatch '"port":8123') {
+            throw "port 8123 not found in JSON output"
+          }
+
+          Stop-Process -Id $proc.Id -Force
+
+      - name: Smoke test — --kill flag
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "python" -ArgumentList "-m","http.server","8124" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 1
+
+          .\target\release\portmortem.exe 8124 --kill
+          Start-Sleep -Seconds 1
+
+          # Process should be gone now
+          $stillAlive = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if ($stillAlive) {
+            Write-Error "process still alive after --kill"
+            exit 1
+          }
+
+      - name: --version / --help sanity check
+        shell: pwsh
+        run: |
+          .\target\release\portmortem.exe --version
+          .\target\release\portmortem.exe --help

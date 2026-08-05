@@ -79,6 +79,8 @@ just deploy
   Requires read access to `/proc` — works without root for processes owned by your user.  
   For other users' processes you may need `sudo`.
 - **macOS**: Requires `lsof` (installed by default on all macOS versions) and `ps`.
+- **Windows**: No external dependencies. Reads the socket table directly via
+  the IP Helper API (`GetExtendedTcpTable`/`GetExtendedUdpTable`).
 
 ## Usage
 
@@ -125,7 +127,10 @@ src/
 ├── platform.rs   OS-level socket table reading
 │                 Linux: /proc/net/tcp*, /proc/*/fd (inode map)
 │                 macOS: lsof -F (machine-readable mode)
+│                 Windows: GetExtendedTcpTable/GetExtendedUdpTable (IP Helper API)
 ├── process.rs    Process enrichment (binary, cmdline, cwd, user, uptime)
+│                 Windows enrichment uses the `sysinfo` crate — there's no
+│                 public API for reading another process's command line
 └── render.rs     Human-readable + JSON output
 ```
 
@@ -150,7 +155,7 @@ output, `--json`, and `--kill`. Exit code `0` means all checks passed.
 
 - [x] `--kill` flag
 - [x] `--watch` mode: re-runs every N seconds
-- [ ] Windows support (via `netstat` + WMI)
+- [x] Windows support (via the IP Helper API)
 - [x] Shell completions
 
 ## License

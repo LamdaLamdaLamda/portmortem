@@ -53,8 +53,11 @@ pub fn find_port(port: u16) -> Result<Vec<SocketEntry>, String> {
     #[cfg(target_os = "macos")]
     return macos::find_port(port);
 
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    Err("Unsupported platform. portmortem supports Linux and macOS.".to_string())
+    #[cfg(target_os = "windows")]
+    return Ok(windows::all_socket_entries()?.into_iter().filter(|e| e.port == port).collect());
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    Err("Unsupported platform. portmortem supports Linux, macOS, and Windows.".to_string())
 }
 
 // ── Linux (/proc/net) ──────────────────────────────────────────────────────
@@ -326,5 +329,172 @@ mod macos {
         // Deduplicate (same pid+port can appear via both IPv4 and IPv6 sockets)
         results.dedup_by_key(|e| (e.pid, e.proto.to_string()));
         Ok(results)
+    }
+}
+
+// ── Windows (IP Helper API) ─────────────────────────────────────────────────
+
+#[cfg(target_os = "windows")]
+pub(crate) use windows::all_socket_entries;
+
+#[cfg(target_os = "windows")]
+mod windows {
+    use super::*;
+    use std::ffi::c_void;
+    use std::mem::size_of;
+    use std::net::Ipv6Addr;
+
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, GetExtendedUdpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID,
+        MIB_UDP6ROW_OWNER_PID, MIB_UDPROW_OWNER_PID, TCP_TABLE_OWNER_PID_ALL, UDP_TABLE_OWNER_PID,
+    };
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
+
+    const MIB_TCP_STATE_LISTEN: u32 = 2;
+    const MIB_TCP_STATE_ESTAB: u32 = 5;
+    const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
+    const NO_ERROR: u32 = 0;
+
+    /// Every TCP/UDP, IPv4/IPv6 socket currently known to the system, with owning PID.
+    /// Shared by `find_port` (filters by port) and `process::read_extra_ports` (filters by pid).
+    pub(crate) fn all_socket_entries() -> Result<Vec<SocketEntry>, String> {
+        let mut results = Vec::new();
+        results.extend(tcp4_entries()?);
+        results.extend(tcp6_entries()?);
+        results.extend(udp4_entries()?);
+        results.extend(udp6_entries()?);
+        Ok(results)
+    }
+
+    fn tcp_state(raw: u32) -> SocketState {
+        match raw {
+            MIB_TCP_STATE_LISTEN => SocketState::Listen,
+            MIB_TCP_STATE_ESTAB => SocketState::Established,
+            other => SocketState::Other(other.to_string()),
+        }
+    }
+
+    /// Ports in these structures are 16 bits, stored network-byte-order in the
+    /// low half of a DWORD (the upper 16 bits are unspecified/uninitialized).
+    fn extract_port(raw: u32) -> u16 {
+        u16::from_be((raw & 0xFFFF) as u16)
+    }
+
+    /// `dwLocalAddr` is a raw copy of an `in_addr`'s bytes — read them in
+    /// memory order (no endian conversion), same as the `inet_ntoa` example
+    /// in Microsoft's own docs for this struct.
+    fn format_ipv4(addr: u32, port_raw: u32) -> String {
+        let b = addr.to_ne_bytes();
+        format!("{}.{}.{}.{}:{}", b[0], b[1], b[2], b[3], extract_port(port_raw))
+    }
+
+    fn format_ipv6(addr: [u8; 16], port_raw: u32) -> String {
+        format!("[{}]:{}", Ipv6Addr::from(addr), extract_port(port_raw))
+    }
+
+    /// Calls a `GetExtended*Table`-shaped function with the grow-and-retry
+    /// pattern Microsoft's own docs use: first call learns the required size,
+    /// then a real call fills a buffer of that size.
+    fn fetch_table(mut call: impl FnMut(*mut c_void, *mut u32) -> u32) -> Result<Vec<u8>, String> {
+        let mut size: u32 = 0;
+        let _ = call(std::ptr::null_mut(), &mut size);
+
+        for _ in 0..5 {
+            let mut buf = vec![0u8; size as usize];
+            match call(buf.as_mut_ptr() as *mut c_void, &mut size) {
+                NO_ERROR => return Ok(buf),
+                ERROR_INSUFFICIENT_BUFFER => continue, // size was updated, retry
+                other => return Err(format!("IP Helper API call failed (error {})", other)),
+            }
+        }
+        Err("failed to read socket table after multiple attempts".to_string())
+    }
+
+    fn tcp4_entries() -> Result<Vec<SocketEntry>, String> {
+        let buf = fetch_table(|ptr, size| unsafe {
+            GetExtendedTcpTable(ptr, size, 0, AF_INET as u32, TCP_TABLE_OWNER_PID_ALL, 0)
+        })?;
+
+        let num_entries = unsafe { *(buf.as_ptr() as *const u32) } as usize;
+        let rows_ptr = unsafe { buf.as_ptr().add(size_of::<u32>()) as *const MIB_TCPROW_OWNER_PID };
+        let rows = unsafe { std::slice::from_raw_parts(rows_ptr, num_entries) };
+
+        Ok(rows
+            .iter()
+            .map(|r| SocketEntry {
+                pid: r.dwOwningPid,
+                port: extract_port(r.dwLocalPort),
+                proto: Proto::Tcp,
+                state: tcp_state(r.dwState),
+                local_addr: format_ipv4(r.dwLocalAddr, r.dwLocalPort),
+            })
+            .collect())
+    }
+
+    fn tcp6_entries() -> Result<Vec<SocketEntry>, String> {
+        let buf = fetch_table(|ptr, size| unsafe {
+            GetExtendedTcpTable(ptr, size, 0, AF_INET6 as u32, TCP_TABLE_OWNER_PID_ALL, 0)
+        })?;
+
+        let num_entries = unsafe { *(buf.as_ptr() as *const u32) } as usize;
+        let rows_ptr =
+            unsafe { buf.as_ptr().add(size_of::<u32>()) as *const MIB_TCP6ROW_OWNER_PID };
+        let rows = unsafe { std::slice::from_raw_parts(rows_ptr, num_entries) };
+
+        Ok(rows
+            .iter()
+            .map(|r| SocketEntry {
+                pid: r.dwOwningPid,
+                port: extract_port(r.dwLocalPort),
+                proto: Proto::Tcp6,
+                state: tcp_state(r.dwState),
+                local_addr: format_ipv6(r.ucLocalAddr, r.dwLocalPort),
+            })
+            .collect())
+    }
+
+    fn udp4_entries() -> Result<Vec<SocketEntry>, String> {
+        let buf = fetch_table(|ptr, size| unsafe {
+            GetExtendedUdpTable(ptr, size, 0, AF_INET as u32, UDP_TABLE_OWNER_PID, 0)
+        })?;
+
+        let num_entries = unsafe { *(buf.as_ptr() as *const u32) } as usize;
+        let rows_ptr = unsafe { buf.as_ptr().add(size_of::<u32>()) as *const MIB_UDPROW_OWNER_PID };
+        let rows = unsafe { std::slice::from_raw_parts(rows_ptr, num_entries) };
+
+        Ok(rows
+            .iter()
+            .map(|r| SocketEntry {
+                pid: r.dwOwningPid,
+                port: extract_port(r.dwLocalPort),
+                proto: Proto::Udp,
+                // UDP is connectionless — no real state, matches the macOS
+                // lsof path where UDP sockets default to Listen too.
+                state: SocketState::Listen,
+                local_addr: format_ipv4(r.dwLocalAddr, r.dwLocalPort),
+            })
+            .collect())
+    }
+
+    fn udp6_entries() -> Result<Vec<SocketEntry>, String> {
+        let buf = fetch_table(|ptr, size| unsafe {
+            GetExtendedUdpTable(ptr, size, 0, AF_INET6 as u32, UDP_TABLE_OWNER_PID, 0)
+        })?;
+
+        let num_entries = unsafe { *(buf.as_ptr() as *const u32) } as usize;
+        let rows_ptr =
+            unsafe { buf.as_ptr().add(size_of::<u32>()) as *const MIB_UDP6ROW_OWNER_PID };
+        let rows = unsafe { std::slice::from_raw_parts(rows_ptr, num_entries) };
+
+        Ok(rows
+            .iter()
+            .map(|r| SocketEntry {
+                pid: r.dwOwningPid,
+                port: extract_port(r.dwLocalPort),
+                proto: Proto::Udp6,
+                state: SocketState::Listen,
+                local_addr: format_ipv6(r.ucLocalAddr, r.dwLocalPort),
+            })
+            .collect())
     }
 }
