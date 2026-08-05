@@ -31,12 +31,11 @@ libc = "0.2.183"
 sysinfo = "0.30"
 
 # Socket table (GetExtendedTcpTable/GetExtendedUdpTable via the IP Helper
-# API) and --kill (OpenProcess/TerminateProcess via the Threading API)
+# API). --kill shells out to taskkill instead of calling OpenProcess/
+# TerminateProcess directly — see the comment in kill.rs for why.
 windows-sys = { version = "0.61", features = [
     "Win32_NetworkManagement_IpHelper",
     "Win32_Networking_WinSock",
-    "Win32_System_Threading",
-    "Win32_Foundation",
 ] }
 
 [profile.release]

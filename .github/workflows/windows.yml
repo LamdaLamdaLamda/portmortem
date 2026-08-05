@@ -90,7 +90,11 @@ jobs:
 
           # Diagnostic: does portmortem resolve the same PID PowerShell started,
           # and does the process' owner match the current user?
-          $json = .\target\release\portmortem.exe 8124 --json
+          # portmortem prints one JSON line per matched socket (e.g. one for
+          # TCP4, one for TCP6) — PowerShell captures multi-line output as a
+          # string array, and -match against an array doesn't populate
+          # $Matches, so flatten to a single string first.
+          $json = (.\target\release\portmortem.exe 8124 --json | Out-String)
           Write-Output "portmortem resolved: $json"
           if ($json -match '"pid":(\d+)') {
             $resolvedPid = $Matches[1]

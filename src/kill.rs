@@ -13,28 +13,25 @@ pub fn kill_process(pid: i32) -> io::Result<()> {
     }
 }
 
-// Direct WinAPI call rather than sysinfo's snapshot-based Process::kill():
-// that requires re-enumerating the whole system process list and looking
-// the PID up in it, which adds a snapshot-staleness window for no reason —
-// OpenProcess + TerminateProcess targets the exact PID directly.
+// Shells out to taskkill rather than calling OpenProcess/TerminateProcess
+// directly: a real-world CI run hit ERROR_ACCESS_DENIED from the raw WinAPI
+// call even for a same-user process with a correctly-resolved PID — almost
+// certainly security software heuristically blocking an unsigned binary's
+// direct process-handle manipulation. taskkill.exe is a signed, trusted
+// system tool and doesn't run into that, and this matches the existing
+// pattern of shelling out to native tools on macOS (lsof/ps).
 #[cfg(target_os = "windows")]
 pub fn kill_process(pid: i32) -> io::Result<()> {
-    use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    use std::process::Command;
 
-    unsafe {
-        let handle = OpenProcess(PROCESS_TERMINATE, 0, pid as u32);
-        if handle.is_null() {
-            return Err(io::Error::last_os_error());
-        }
+    let output = Command::new("taskkill").args(["/PID", &pid.to_string(), "/F"]).output()?;
 
-        let result = TerminateProcess(handle, 1);
-        CloseHandle(handle);
-
-        if result == 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let msg = if !stderr.trim().is_empty() { stderr.trim() } else { stdout.trim() };
+        Err(io::Error::other(msg.to_string()))
     }
 }
