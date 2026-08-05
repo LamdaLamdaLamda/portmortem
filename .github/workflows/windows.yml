@@ -39,7 +39,23 @@ jobs:
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath "python" -ArgumentList "-m","http.server","8123" -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 1
+
+          # Start-Process returns once the process is launched, not once it's
+          # actually listening — poll netstat instead of a fixed sleep so this
+          # isn't flaky under CI load.
+          $bound = $false
+          for ($i = 0; $i -lt 20; $i++) {
+            if (netstat -ano | Select-String ":8123 " | Select-String "LISTENING") {
+              $bound = $true
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $bound) {
+            throw "python http.server never reached LISTENING state on port 8123"
+          }
+          Write-Output "netstat confirms listener:"
+          netstat -ano | Select-String ":8123 "
 
           .\target\release\portmortem.exe 8123
           $json = .\target\release\portmortem.exe 8123 --json
@@ -56,7 +72,18 @@ jobs:
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath "python" -ArgumentList "-m","http.server","8124" -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 1
+
+          $bound = $false
+          for ($i = 0; $i -lt 20; $i++) {
+            if (netstat -ano | Select-String ":8124 " | Select-String "LISTENING") {
+              $bound = $true
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $bound) {
+            throw "python http.server never reached LISTENING state on port 8124"
+          }
 
           .\target\release\portmortem.exe 8124 --kill
           Start-Sleep -Seconds 1
