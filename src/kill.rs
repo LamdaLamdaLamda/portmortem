@@ -13,13 +13,28 @@ pub fn kill_process(pid: i32) -> io::Result<()> {
     }
 }
 
+// Direct WinAPI call rather than sysinfo's snapshot-based Process::kill():
+// that requires re-enumerating the whole system process list and looking
+// the PID up in it, which adds a snapshot-staleness window for no reason —
+// OpenProcess + TerminateProcess targets the exact PID directly.
 #[cfg(target_os = "windows")]
 pub fn kill_process(pid: i32) -> io::Result<()> {
-    let sys = sysinfo::System::new_all();
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
 
-    match sys.process(sysinfo::Pid::from_u32(pid as u32)) {
-        Some(process) if process.kill() => Ok(()),
-        Some(_) => Err(io::Error::other("failed to terminate process")),
-        None => Err(io::Error::other("process not found")),
+    unsafe {
+        let handle = OpenProcess(PROCESS_TERMINATE, 0, pid as u32);
+        if handle.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+
+        let result = TerminateProcess(handle, 1);
+        CloseHandle(handle);
+
+        if result == 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
     }
 }
