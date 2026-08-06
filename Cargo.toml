@@ -18,9 +18,25 @@ clap_complete = "4"
 # Colored terminal output
 colored = "2"
 
-# Cross-platform process info
-sysinfo = "0.30"
+# SIGINT handling (main.rs) and process termination on Unix (kill.rs).
+# libc also builds on Windows (maps onto the Universal CRT), so this stays a
+# plain cross-platform dependency rather than a cfg(unix)-gated one.
 libc = "0.2.183"
+
+[target.'cfg(windows)'.dependencies]
+# Process enrichment (exe path, cmdline, cwd, user, start time) — Windows has
+# no public API for reading another process's command line, so we lean on
+# sysinfo's tested implementation instead of hand-rolling unsafe PEB-reading
+# code we can't verify without a Windows machine.
+sysinfo = "0.30"
+
+# Socket table (GetExtendedTcpTable/GetExtendedUdpTable via the IP Helper
+# API). --kill shells out to taskkill instead of calling OpenProcess/
+# TerminateProcess directly — see the comment in kill.rs for why.
+windows-sys = { version = "0.61", features = [
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+] }
 
 [profile.release]
 opt-level = "z"     # Minimize binary size

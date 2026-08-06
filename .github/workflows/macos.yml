@@ -34,9 +34,17 @@ jobs:
 
       - name: Smoke test — occupied port (real lsof path)
         run: |
-          python3 -m http.server 8123 &
+          # nc instead of `python3 -m http.server`: no interpreter startup,
+          # no DNS/hostname resolution, no output buffering to worry about —
+          # binds essentially instantly, far fewer moving parts to debug.
+          nc -l 8123 &
           SERVER_PID=$!
-          sleep 1
+
+          for i in $(seq 1 20); do
+            lsof -nP -iTCP:8123 -sTCP:LISTEN >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          lsof -nP -iTCP:8123 -sTCP:LISTEN || { echo "port 8123 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8123
           ./target/release/portmortem 8123 --json | tee /tmp/out.json
@@ -48,9 +56,14 @@ jobs:
 
       - name: Smoke test — --kill flag
         run: |
-          python3 -m http.server 8124 &
+          nc -l 8124 &
           SERVER_PID=$!
-          sleep 1
+
+          for i in $(seq 1 20); do
+            lsof -nP -iTCP:8124 -sTCP:LISTEN >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          lsof -nP -iTCP:8124 -sTCP:LISTEN || { echo "port 8124 never reached LISTEN state" >&2; exit 1; }
 
           ./target/release/portmortem 8124 --kill
           sleep 1

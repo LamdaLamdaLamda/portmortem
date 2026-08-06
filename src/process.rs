@@ -360,6 +360,81 @@ fn read_extra_ports(pid: u32, exclude_port: u16) -> Vec<ExtraPort> {
     extras
 }
 
+// ── Windows: via the `sysinfo` crate ────────────────────────────────────────
+//
+// Windows has no public API for reading another process's command line; the
+// only native route is undocumented (NtQueryInformationProcess + reading the
+// remote process's PEB), which we can't verify without a Windows machine to
+// test on. `sysinfo` already handles that internally and is battle-tested,
+// so we lean on it here instead of hand-rolling unsafe, unverifiable code.
+
+#[cfg(target_os = "windows")]
+fn with_process<T>(pid: u32, f: impl FnOnce(&sysinfo::Process) -> Option<T>) -> Option<T> {
+    let sys = sysinfo::System::new_all();
+    f(sys.process(sysinfo::Pid::from_u32(pid))?)
+}
+
+#[cfg(target_os = "windows")]
+fn read_binary_path(pid: u32) -> Option<String> {
+    with_process(pid, |p| p.exe().map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[cfg(target_os = "windows")]
+fn read_cmdline(pid: u32) -> Option<String> {
+    with_process(pid, |p| {
+        let cmd = p.cmd();
+        if cmd.is_empty() {
+            None
+        } else {
+            Some(cmd.join(" "))
+        }
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn read_cwd(pid: u32) -> Option<String> {
+    with_process(pid, |p| p.cwd().map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[cfg(target_os = "windows")]
+fn read_username(pid: u32) -> Option<String> {
+    let sys = sysinfo::System::new_all();
+    let uid = sys.process(sysinfo::Pid::from_u32(pid))?.user_id()?;
+    let users = sysinfo::Users::new_with_refreshed_list();
+    users.get_user_by_id(uid).map(|u| u.name().to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn read_start_time(pid: u32) -> Option<Duration> {
+    with_process(pid, |p| {
+        let start = p.start_time();
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs();
+        if now > start {
+            Some(Duration::from_secs(now - start))
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn read_extra_ports(pid: u32, exclude_port: u16) -> Vec<ExtraPort> {
+    let entries = match crate::platform::all_socket_entries() {
+        Ok(e) => e,
+        Err(_) => return vec![],
+    };
+
+    let mut extras: Vec<ExtraPort> = entries
+        .into_iter()
+        .filter(|e| e.pid == pid && e.port != exclude_port)
+        .map(|e| ExtraPort { port: e.port, proto: e.proto.to_string(), state: e.state.to_string() })
+        .collect();
+
+    extras.sort_by_key(|e| e.port);
+    extras.dedup_by_key(|e| e.port);
+    extras
+}
+
 // ── Shared helpers ─────────────────────────────────────────────────────────
 
 fn uid_to_username(uid: u32) -> Option<String> {
