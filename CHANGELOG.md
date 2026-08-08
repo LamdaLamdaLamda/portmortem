@@ -7,11 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-06
+
 ### Added
 
 - Windows support: socket table via the IP Helper API
   (`GetExtendedTcpTable`/`GetExtendedUdpTable`), process enrichment via the
-  `sysinfo` crate, `--kill` via `sysinfo::Process::kill`
+  `sysinfo` crate, `--kill` via `taskkill`
+- Prebuilt release binaries for Linux (x86_64), macOS (arm64/x86_64), and
+  Windows (x86_64), with a `SHA256SUMS` file per release
+
+### Fixed
+
+- `--kill` no longer panics on failure; it prints a clean error and exits
+  with a non-zero status instead
+- A process bound dual-stack (IPv4 + IPv6 on the same port) was killed
+  twice by `--kill`, causing a spurious "process not found"/"access
+  denied" error on the second attempt. Already-terminated pids are now
+  tracked and skipped.
 
 ## [1.1.0] - 2026-08-03
 
@@ -43,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS support via `lsof -F` (machine-readable output mode)
 - Shell completion scripts for bash, zsh, fish, and nu
 
-[Unreleased]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/LamdaLamdaLamda/portmortem/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/LamdaLamdaLamda/portmortem/releases/tag/v1.0.0

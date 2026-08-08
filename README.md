@@ -55,6 +55,10 @@ $ portmortem 8080 --json | jq .cmdline
 
 ## Install
 
+Download a prebuilt binary from the [releases page](https://github.com/LamdaLamdaLamda/portmortem/releases) (Linux x86_64, macOS arm64/x86_64, Windows x86_64) — each release includes a `SHA256SUMS` file to verify the download.
+
+Or build from source:
+
 ```bash
 cargo install --path .
 ```
@@ -79,8 +83,9 @@ just deploy
   Requires read access to `/proc` — works without root for processes owned by your user.  
   For other users' processes you may need `sudo`.
 - **macOS**: Requires `lsof` (installed by default on all macOS versions) and `ps`.
-- **Windows**: No external dependencies. Reads the socket table directly via
-  the IP Helper API (`GetExtendedTcpTable`/`GetExtendedUdpTable`).
+- **Windows**: Reads the socket table directly via the IP Helper API
+  (`GetExtendedTcpTable`/`GetExtendedUdpTable`), no external dependencies for
+  lookups. `--kill` uses the built-in `taskkill` utility.
 
 ## Usage
 
